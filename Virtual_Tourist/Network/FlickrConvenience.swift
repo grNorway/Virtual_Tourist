@@ -18,7 +18,7 @@ extension FlickrClient{
             if success{
                 self.getNumberOfDownloadedPhotos(pin: pin, photoArray: photoArray!, completionHandlerForGetNumberOfDownloadedPhotos: { (success, downloadedItems, photoArray, errorString) in
                     if success{
-                        pin.numberOfImages = Int16(downloadedItems)
+                        
                         completionHandlerForGetPhotosFromFlickrDownloadedItems(true, downloadedItems, nil)
                         
                         self.downloadImageData(pin: pin, photoArray: photoArray!, completionHandlerForDownloadImageData: { (success, errorString) in
@@ -107,20 +107,22 @@ extension FlickrClient{
             }
             
             let pinCoordinates = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-            let pinSaved = checkForDeletedPin(stack: stack!, pinCoordinates: pinCoordinates)
+            let pinSaved = checkForDeletedPin(stack: stack, pinCoordinates: pinCoordinates)
             
-            guard !pinSaved else{
+            guard pinSaved == true else{
                 print("Pin is Deleted")
                 completionHandlerForDownloadImageData(false, "")
                 return
             }
             
-            self.stack!.mainContext.perform {
-                let _ = PhotoFrame(pin: pin, imageData: imageData as NSData, context: self.stack!.mainContext)
+            self.stack.mainContext.perform {
+                let _ = PhotoFrame(pin: pin, imageData: imageData as NSData, context: self.stack.mainContext)
             }
             
-            completionHandlerForDownloadImageData(true, nil)
+            
         }
+        
+        completionHandlerForDownloadImageData(true, nil)
     }
     
     // ----- Helper Functions ----- //
@@ -138,7 +140,7 @@ extension FlickrClient{
         var results = [Pin]()
         stack.mainContext.performAndWait {
             do{
-                results = try self.stack!.mainContext.fetch(request) as! [Pin]
+                results = try self.stack.mainContext.fetch(request) as! [Pin]
             }catch{
                 print("Error Checking Deleted Pin")
             }

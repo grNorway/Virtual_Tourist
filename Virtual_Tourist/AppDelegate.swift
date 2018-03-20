@@ -12,12 +12,16 @@ import UIKit
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
-    let coreDataStack = CoreDataStack(modelName: "Model")
-
+    let coreDataStack = CoreDataStack(modelName: "Model")!
+    var unfinishedPins = [Pin]()
+    private enum addRemoveObservers {
+        case added , removed
+    }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         passCoreDataStack()
+        observersForUnfinishedPins(are: .added)
         return true
     }
 
@@ -27,12 +31,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+        saveHasReturnedPinsOnExit(are: true)
     }
 
     func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
+        saveHasReturnedPinsOnExit(are: false)
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
@@ -40,15 +43,71 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+        observersForUnfinishedPins(are: .removed)
+        saveHasReturnedPinsOnExit(are: true)
     }
+    
+    
+    
 
+    // Send stack to MapViewController
     private func passCoreDataStack(){
-        
         let navigationController = window!.rootViewController as! UINavigationController
         let mapViewController = navigationController.viewControllers.first as! MapViewController
         mapViewController.stack = coreDataStack
     }
+    
+    // Add/Remove Observers for unfinished Pins
+    private func observersForUnfinishedPins(are observersAre:addRemoveObservers){
+        switch observersAre{
+        case .added:
+            NotificationCenter.default.addObserver(self, selector: #selector(addUnfinishedPin(_:)), name: .addUnfinishedPinToAppDelegate, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(removeUnfinishedPin(_:)), name: .removeUnfinishedPinFromAppDelegate, object: nil)
+        case .removed:
+            NotificationCenter.default.removeObserver(self)
+        }
+    }
+    
+    // Add unfinishedPin to Array
+    @objc private func addUnfinishedPin(_ notification:Notification){
+        
+        guard let unfinishedPin = notification.userInfo?["unfinishedPin"] as? Pin else {return}
+        self.unfinishedPins.append(unfinishedPin)
+        print("Unfinished Pin added to appDelegate")
+    }
+    
+    // Remove unfinishedPin from Array
+    @objc private func removeUnfinishedPin(_ notification:Notification){
+        
+        guard let unfinishedPin = notification.userInfo?["unfinishedPin"] as? Pin else {return}
+        
+        for pin in unfinishedPins{
+            if pin == unfinishedPin{
+                if let index = unfinishedPins.index(of: pin){
+                    self.unfinishedPins.remove(at: index)
+                    print("Unfinished Pin has removed from appDelegate")
+                }
+            }
+        }
+    }
+    
+    // Sets the hasReturned property according the exit of the App
+    // If the get method has not returned from the API for varius reasons
+    private func saveHasReturnedPinsOnExit(are saved:Bool){
+        for pin in unfinishedPins{
+            coreDataStack.mainContext.performAndWait {
+                switch saved{
+                case true:
+                    pin.hasReturned = true
+                case false:
+                    pin.hasReturned = false
+                }
+            }
+        }
+        coreDataStack.saveChanges()
+    }
+    
+    
 
 }
 

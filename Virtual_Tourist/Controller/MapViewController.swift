@@ -25,8 +25,8 @@ class MapViewController: UIViewController {
     
     
     //MARK: Properties
-    var annotations = [Pin]()
-    var editingMode = false
+    private var annotations = [Pin]()
+    private var editingMode = false
     
     //MARK: - Core Data Properties
     var stack : CoreDataStack!
@@ -38,7 +38,6 @@ class MapViewController: UIViewController {
         super.viewDidLoad()
 
         title = "Virtual Tourist"
-         
         
     }
     
@@ -82,10 +81,11 @@ class MapViewController: UIViewController {
     
     
     // Fetches the saved pins from Core Data
+    // First we remove them
+    // Then fetch and load them
     private func fetchSavedPins(){
         
         mapView.removeAnnotations(mapView.annotations)
-        
         
         stack.fetch(objects: "Pin", from: stack.mainContext, withSortDesciptorKey: "creationDate", ascending: true) { (results) in
             
@@ -106,6 +106,8 @@ class MapViewController: UIViewController {
         
     }
     
+    
+    // BarButtonItem - action Edit/Done to delete an pin
     @IBAction func editButtonPressed(_ sender: UIBarButtonItem) {
         switch editingMode{
         case true:
@@ -147,10 +149,84 @@ class MapViewController: UIViewController {
             let fetchedResultsController = NSFetchedResultsController(fetchRequest: fetchRequest, managedObjectContext: stack.mainContext, sectionNameKeyPath: nil, cacheName: nil)
             
             locationPhotosViewController.fetchedResultsController = fetchedResultsController
+            locationPhotosViewController.stack = stack
             
+            let unfinishedPin : [String : Pin] = ["unfinishedPin": selectedPin]
             
-            
-            
+            //MAKE CALL TO FLICKR
+            if selectedPin.images?.count == 0 && selectedPin.hasReturned == true{
+                
+                selectedPin.hasReturned = false
+                NotificationCenter.default.post(name: .addUnfinishedPinToAppDelegate, object: nil, userInfo: unfinishedPin)
+                
+                FlickrClient.sharedInstance.getPhotosFromFlickr(pin: selectedPin, completionHandlerForGetPhotosFromFlickrDownloadedItems: { (success, willDownloadPhotos, errorString) in
+                    
+                    if success{
+                        print("Success number Of images willDownloadPhotos : \(willDownloadPhotos) ")
+                        self.stack.mainContext.performAndWait {
+                            selectedPin.numberOfImages = Int16(willDownloadPhotos)
+                        }
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .pinNumberOfImages, object: nil)
+                        }
+                        
+                    }else{
+                        NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
+                        print("Not Success willDownloadPhotos \(errorString!)")
+                        DispatchQueue.main.async {
+                            let errorString : [String : String] = ["errorString":errorString!]
+                            NotificationCenter.default.post(name: .errorMessageToAlertController, object: nil, userInfo: errorString)
+                            NotificationCenter.default.post(name: .enableLoadMorePictures, object: nil)
+                        }
+              
+                        self.stack.mainContext.perform {
+                            selectedPin.hasReturned = true
+                        }
+                    }
+                    
+                }, completionHandlerForGetPhotosFromFlickrFinishDownloading: { (success, errorString) in
+                    if success{
+                        NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
+                        print("Success DownloadingAllPhotos")
+                        self.stack.mainContext.performAndWait {
+                            selectedPin.hasReturned = true
+                        }
+                        
+                        DispatchQueue.main.async {
+                            
+                            NotificationCenter.default.post(name: .allowCellSelection, object: nil)
+                            NotificationCenter.default.post(name: .enableLoadMorePictures, object: nil)
+                        }
+                        
+                    }else{
+                        NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
+                        print("Unable to Download Photos")
+                        self.stack.mainContext.performAndWait {
+                            selectedPin.hasReturned = true
+                        }
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .errorFinishingTheDownloadingPhotos, object: nil)
+                            guard errorString != "" else { return }
+                            let errorString : [String:String] = ["errorString":errorString!]
+                            NotificationCenter.default.post(name: .errorMessageToAlertController, object: nil, userInfo: errorString)
+                        }  
+                    }
+                })
+                
+            }else if !selectedPin.hasReturned{
+                print("selected Pin has not returned from Flickr Get Method")
+            }else if selectedPin.hasReturned{
+                print("selected Pin has Returned from Flickr Get Method")
+                if Int(selectedPin.numberOfImages) > selectedPin.images!.count{
+                    stack.mainContext.performAndWait {
+                        selectedPin.numberOfImages = Int16(selectedPin.images!.count)
+                    }
+                }
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .enableCellsAndLoadMorePicturesButton, object: nil)
+                }
+                
+            }
             
         default:
             break
@@ -160,6 +236,7 @@ class MapViewController: UIViewController {
 
 }
 
+//MARK: - MKMapViewDelegate
 extension MapViewController : MKMapViewDelegate {
     
     func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {

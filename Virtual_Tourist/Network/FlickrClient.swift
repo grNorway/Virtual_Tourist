@@ -21,7 +21,7 @@ class FlickrClient {
         
         let request = NSMutableURLRequest(url: flickrURLFromParameters(parameters: parameters))
         
-        let task = session.dataTask(with: request as! URLRequest) { (data, response, error) in
+        let task = session.dataTask(with: request as URLRequest) { (data, response, error) in
             
             func displayError(errorString: String){
                 print(errorString)
