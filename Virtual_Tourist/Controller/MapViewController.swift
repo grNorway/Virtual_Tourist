@@ -269,7 +269,10 @@ extension MapViewController : MKMapViewDelegate {
             
             switch editingMode{
             case true:
+                let unfinishedPin : [String:Pin] = ["unfinishedPin":pin]
                 stack.deleteCoreDataObject(object: pin, from: stack.mainContext)
+                //TODO: - Remove from app delegate pin
+                NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
                 fetchSavedPins()
             case false:
                 performSegue(withIdentifier: Segue.LocationPhotos, sender: pin)
