@@ -102,13 +102,7 @@ class LocationPhotosViewController: UIViewController {
             NotificationCenter.default.addObserver(self, selector: #selector(updateNumberOfItemsErrorTimeOut), name: .errorFinishingTheDownloadingPhotos, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(enableCellsAndLoadButton), name: .enableCellsAndLoadMorePicturesButton, object: nil)
             
-            
         case .Disabled:
-//            NotificationCenter.default.removeObserver(self, name: .pinNumberOfImages, object: nil)
-//            NotificationCenter.default.removeObserver(self, name: .errorMessageToAlertController, object: nil)
-//            NotificationCenter.default.removeObserver(self, name: .allowCellSelection, object: nil)
-//            NotificationCenter.default.removeObserver(self, name: .enableLoadMorePictures, object: nil)
-//            NotificationCenter.default.removeObserver(self, name: .errorFinishingTheDownloadingPhotos, object: nil)
             NotificationCenter.default.removeObserver(self)
         }
     }
@@ -126,8 +120,6 @@ class LocationPhotosViewController: UIViewController {
         }
         
     }
-    
-    //TODO: Remove Observers when making again call to Flickr
     
     @objc private func saveEditedObject(){
         stack.mainContext.perform{
@@ -229,17 +221,12 @@ class LocationPhotosViewController: UIViewController {
         case true:
             deleteSelectedObjects()
         case false:
-            //TODO: Delete all photoFrame objects from pin object
+            
             allowSelectionOnCells(is: .Disable)
             loadMorePhotosButton(is: .Disable)
             notificationsForEditedObject(are: .Disabled)
             let results = fetchedResultsController.fetchedObjects!
-//            stack.fetch(objects: "PhotoFrame", from: stack.mainContext, withSortDesciptorKey: "creationDate", ascending: true, withCompletion: { (res) in
-//                if let resu = res as? [PhotoFrame]{
-//                print("res?.count : \(resu.count)")
-//                }
-//
-//            })
+
             stack.mainContext.performAndWait {
                 for result in results{
                     self.stack.mainContext.delete(result as! NSManagedObject)
@@ -279,17 +266,7 @@ class LocationPhotosViewController: UIViewController {
                 
             }, completionHandlerForGetPhotosFromFlickrFinishDownloading: { (success, errorString) in
                 if success{
-                    NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
                     print("Success DownloadingAllPhotos")
-                    self.stack.mainContext.performAndWait {
-                        self.pin.hasReturned = true
-                    }
-                    print("P I N : \(self.pin)")
-                    DispatchQueue.main.async {
-                        
-                        NotificationCenter.default.post(name: .allowCellSelection, object: nil)
-                        NotificationCenter.default.post(name: .enableLoadMorePictures, object: nil)
-                    }
                     
                 }else{
                     NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
@@ -365,9 +342,17 @@ class LocationPhotosViewController: UIViewController {
     }
     
     private func checkForEditedPin(if hasReturned:Bool){
-        if !pin.hasReturned && pin.numberOfImages == Int(pin.images!.count){
+        if !pin.hasReturned && pin.numberOfImages == 0{
+            return
+         
+         }else if !pin.hasReturned && pin.numberOfImages == Int(pin.images!.count){
             stack.mainContext.performAndWait {
                 pin.hasReturned = true
+                let unfinishedPin : [String : Pin] = ["unfinishedPin": pin]
+                NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
+                NotificationCenter.default.post(name: .allowCellSelection, object: nil)
+                NotificationCenter.default.post(name: .enableLoadMorePictures, object: nil)
+                
             }
         }
     }
@@ -427,8 +412,6 @@ extension LocationPhotosViewController : UICollectionViewDataSource {
             print("2")
           return Int(pin.numberOfImages)
         }
-        
-        
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -536,7 +519,7 @@ extension LocationPhotosViewController : NSFetchedResultsControllerDelegate {
             }
             
         }, completion: {(_) in
-            //self.checkForEditedPin(if: false)
+            self.checkForEditedPin(if: false)
             
         })
     }

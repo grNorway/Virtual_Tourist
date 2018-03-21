@@ -96,27 +96,29 @@ extension FlickrClient{
                 return
             }
             
-            guard let imageURL = URL(string: URLString) else {
-                completionHandlerForDownloadImageData(false, NetworkErrors.FLickrInternalError)
-                return
-            }
-            
-            guard let imageData = try? Data(contentsOf: imageURL) else {
-                completionHandlerForDownloadImageData(false, "It appears there is no Internet connection.Please Check you Internet Connection")
-                return
-            }
-            
-            let pinCoordinates = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-            let pinSaved = checkForDeletedPin(stack: stack, pinCoordinates: pinCoordinates)
-            
-            guard pinSaved == true else{
-                print("Pin is Deleted")
-                completionHandlerForDownloadImageData(false, "")
-                return
-            }
-            
-            self.stack.mainContext.perform {
-                let _ = PhotoFrame(pin: pin, imageData: imageData as NSData, context: self.stack.mainContext)
+            stack.mainContext.perform {
+                self.downloadImage(imagePath: URLString, completionHandlerForDownloadImage: { (data, errorString) in
+                    
+                    if errorString != nil {
+                        completionHandlerForDownloadImageData(false, "")
+                        return
+                    }else{
+        
+                        let pinSaved  = self.checkForDeletedPin(stack: self.stack, pin: pin)
+                        
+                        guard pinSaved == true else{
+                            print("Pin is Deleted")
+                            completionHandlerForDownloadImageData(false, "")
+                            return
+                        }
+                        
+                        self.stack.mainContext.performAndWait {
+                            let _ = PhotoFrame(pin: pin, imageData: data! as NSData, context: self.stack.mainContext)
+                            self.stack.saveChanges()
+                            print("Download Photos OK")
+                        }
+                    }
+                })
             }
             
             
@@ -128,7 +130,12 @@ extension FlickrClient{
     // ----- Helper Functions ----- //
     
     // Check for deleted pin
-    private func checkForDeletedPin(stack : CoreDataStack , pinCoordinates : CLLocationCoordinate2D) -> Bool {
+    private func checkForDeletedPin(stack : CoreDataStack , pin : Pin) -> Bool {
+        
+        var pinCoordinates = CLLocationCoordinate2D()
+        stack.mainContext.performAndWait {
+            pinCoordinates = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        }
         
         let request = NSFetchRequest<NSFetchRequestResult>(entityName:"Pin")
         request.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
@@ -141,6 +148,7 @@ extension FlickrClient{
         stack.mainContext.performAndWait {
             do{
                 results = try self.stack.mainContext.fetch(request) as! [Pin]
+                print("Results Predicate : \(results.count)")
             }catch{
                 print("Error Checking Deleted Pin")
             }
@@ -151,6 +159,27 @@ extension FlickrClient{
         }else{
             return true
         }
+    }
+    
+    private func downloadImage(imagePath: String , completionHandlerForDownloadImage:@escaping (_ imageData : Data? , _ errorString: String?) -> ()){
+        let session = URLSession.shared
+        
+        guard let imgURL = URL(string: imagePath) else {
+            completionHandlerForDownloadImage(nil, "Error URL Download image")
+            return
+        }
+        let request : URLRequest = URLRequest(url: imgURL)
+        
+        let task = session.dataTask(with: request as URLRequest) { (data, response, error) in
+            
+            if error != nil {
+                completionHandlerForDownloadImage(nil, "Error ConpletionHandlerDownloadImage : \(error!.localizedDescription)")
+            }else{
+                completionHandlerForDownloadImage(data, nil)
+            }
+        }
+        task.resume()
+        
     }
     
 }

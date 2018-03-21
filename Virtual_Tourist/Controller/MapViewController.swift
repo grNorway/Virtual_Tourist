@@ -68,7 +68,7 @@ class MapViewController: UIViewController {
             annotation.coordinate = locationCoordinates
             
             let pin = Pin(latitude: annotation.coordinate.latitude, longitude: annotation.coordinate.longitude, context:stack.mainContext )
-            
+            stack.saveChanges()
             annotations.append(pin)
             mapView.addAnnotation(annotation)
             
@@ -186,17 +186,7 @@ class MapViewController: UIViewController {
                     
                 }, completionHandlerForGetPhotosFromFlickrFinishDownloading: { (success, errorString) in
                     if success{
-                        NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
                         print("Success DownloadingAllPhotos")
-                        self.stack.mainContext.performAndWait {
-                            selectedPin.hasReturned = true
-                        }
-                        
-                        DispatchQueue.main.async {
-                            
-                            NotificationCenter.default.post(name: .allowCellSelection, object: nil)
-                            NotificationCenter.default.post(name: .enableLoadMorePictures, object: nil)
-                        }
                         
                     }else{
                         NotificationCenter.default.post(name: .removeUnfinishedPinFromAppDelegate, object: nil, userInfo: unfinishedPin)
